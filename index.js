@@ -11,10 +11,8 @@ app.use(cors());
 
 
 
-app.get('/',(req,res)=>{
-    res.send('Hello World')
-})
-app.use('/api',productRouter)
+
+app.use('/',productRouter)
 
 app.listen(port,()=>{
     connectDb();
