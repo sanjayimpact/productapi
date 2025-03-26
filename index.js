@@ -12,7 +12,7 @@ app.use(cors());
 
 
 
-app.use('/',productRouter)
+app.use('/api',productRouter)
 
 app.listen(port,()=>{
     connectDb();
