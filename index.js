@@ -14,8 +14,8 @@ app.use(cors());
 app.get('/',(req,res)=>{
     res.send('Hello World')
 })
-app.use('/api',userRouter)
-app.use('/api/product',productRouter)
+app.use('/api',productRouter)
+
 app.listen(port,()=>{
     connectDb();
     console.log(`server is running on port ${port}`)
