@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors'
 import connectDb from './db.js';
-import { userRouter } from './routes/catpro.js';
+
 import { productRouter } from './routes/allproduct.js';
 
 const app = express();
