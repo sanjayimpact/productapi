@@ -11,11 +11,11 @@ app.use(cors());
 
 
 
+app.use('/api',userRouter)
 
 app.use('/',(req,res)=>{
     res.send("hello world")
 })
-app.use('/api',userRouter)
 app.listen(port,()=>{
     connectDb();
     console.log(`server is running on port ${port}`)
