@@ -63,7 +63,7 @@ const aggregateOptions = (variants) => {
 // Helper: Transform a product object using its variants
 const transformProduct = (product, variants, categoryId = null) => {
   const aggregatedOptions = aggregateOptions(variants);
-  const variantImages = variants.map(variant => variant.variant_image).filter(Boolean);
+
   return {
     cat_id: categoryId,
     image: product.featured_image,
@@ -75,7 +75,7 @@ const transformProduct = (product, variants, categoryId = null) => {
     handle: product.handle,
     tags: product.tags.map(tag => tag.tag_name).join(", ") || null,
     options: aggregatedOptions,
-    images: variantImages,
+   
     variants: variants
   };
 };
@@ -85,6 +85,8 @@ const getProductData = async (productExists) => {
   const variants = await Variant.find({ product_id: productExists._id });
   const variantData = await Promise.all(variants.map(getVariantData));
   const productData = {
+    image:productExists?.
+    featured_image,
     title: productExists.title,
     body_html: productExists.body_html,
     vendor: productExists.brand_name?.brand_name || null,
