@@ -49,6 +49,15 @@ const productSchema = new mongoose.Schema({
     ref: 'Brand',
     index: true  // ✅ Brand filters
   },
+  brand:{
+    type:String,
+    index:true
+  },
+  product_type_name:{
+    type:String,
+    index:true
+  },
+
   tags: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Tag',

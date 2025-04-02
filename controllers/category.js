@@ -60,6 +60,7 @@ const aggregateOptions = (variants) => {
 };
 
 const transformProduct = (product, variants, categoryId = null) => {
+
   const aggregatedOptions = aggregateOptions(variants);
   return {
     cat_id: categoryId,
@@ -67,8 +68,9 @@ const transformProduct = (product, variants, categoryId = null) => {
     pro_id: product._id,
     title: product.title,
     body_html: product.body_html,
-    vendor: product.brand_name?.brand_name || null,
-    product_type: product.product_type?.product_type_name || null,
+
+    vendor: product.brand || null,
+    product_type: product.product_type_name || null,
     handle: product.handle,
     tags: product.tags.map(tag => tag.tag_name).join(", ") || null,
     options: aggregatedOptions,
@@ -83,9 +85,10 @@ const getProductData = async (productExists) => {
     productData: {
       image: productExists.featured_image,
       title: productExists.title,
+      brand:productExists?.brand,
       body_html: productExists.body_html,
-      vendor: productExists.brand_name?.brand_name || null,
-      product_type: productExists.product_type?.product_type_name || null,
+      vendor: productExists.brand || null,
+      product_type: productExists.product_type_name || null,
       handle: productExists.handle,
       tags: productExists.tags.map(tag => tag.tag_name).join(", ") || null,
       options: aggregateOptions(variantData),
@@ -96,12 +99,12 @@ const getProductData = async (productExists) => {
 };
 
 const getRelatedProducts = async (productExists, limit = 12) => {
-  if (!productExists.product_type) return [];
+  if (!productExists.product_type_name) return [];
 
   const relatedProducts = await Product.find({
-    product_type: productExists.product_type._id,
+    product_type_name: productExists.product_type_name,
     _id: { $ne: productExists._id }
-  }).limit(limit).populate(['brand_name', 'tags', 'product_type']);
+  }).limit(limit).populate( 'tags');
 
   const relatedProductIds = relatedProducts.map(p => p._id);
   const relatedVariants = await Variant.find({ product_id: { $in: relatedProductIds } });
@@ -136,7 +139,7 @@ const allCategory = async (req, res) => {
       type = "Product";
 
       const productExists = await Product.findOne({ handle })
-        .populate(["brand_name", "tags", "product_type"]);
+        .populate( "tags");
 
       if (!productExists) {
         return res.json({ message: "No data found", status: false, type: null });
@@ -169,9 +172,9 @@ const allCategory = async (req, res) => {
       if (!field || !relation || value === undefined) continue;
 
       switch (field) {
-        case "type": field = "product_type"; break;
+        case "type": field = "product_type_name"; break;
         case "tag": field = "tags"; break;
-        case "vendor": field = "brand_name"; break;
+        case "vendor": field = "brand"; break;
       }
 
       switch (relation) {
@@ -188,20 +191,20 @@ const allCategory = async (req, res) => {
     }
 
     // Resolve references
-    const [productTypeDoc, tagDoc, brandDoc] = await Promise.all([
-      filters.product_type ? ProductType.findOne({ product_type_name: filters.product_type }) : null,
+    const [tagDoc] = await Promise.all([
+      filters.product_type ? Product.findOne({ product_type_name: filters.product_type }) : null,
       filters.tags ? Tag.findOne({ tag_name: filters.tags }) : null,
-      filters.brand_name ? Brand.findOne({ brand_name: filters.brand_name }) : null
+      filters.brand_name ? Product.findOne({ brand: filters.brand_name }) : null
     ]);
 
-    if (productTypeDoc) filters.product_type = productTypeDoc._id;
+    
     if (tagDoc) filters.tags = tagDoc._id;
-    if (brandDoc) filters.brand_name = brandDoc._id;
+   
 
     // Fetch products
     const [products, totalproduct] = await Promise.all([
       Product.find(filters)
-        .populate(["brand_name", "tags", "product_type"])
+        .populate("tags")
         .skip(skip).limit(limit).sort({ title: 1 }),
       Product.countDocuments(filters)
     ]);
@@ -221,6 +224,7 @@ const allCategory = async (req, res) => {
 
     const transformedProducts = products.map(product => {
       const productVariants = variantData.filter(v => String(v.product_id) === String(product._id));
+    
       return transformProduct(product, productVariants, existhandle._id);
     });
 
