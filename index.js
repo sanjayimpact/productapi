@@ -10,7 +10,7 @@ const port = 4000;
 
 app.use(cors());
 
-app.use('/api',myrouter)
+app.use('/api',userRouter)
 
 // app.use('/api',userRouter)
 

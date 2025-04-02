@@ -6,9 +6,7 @@ import { Stock } from "../models/stock.js";
 import { Tag } from "../models/tags.js";
 import { Variant } from "../models/variant.js";
 import { Variantdetail } from "../models/variantdetail.js";
-import { RuleCondition } from "../models/rulecondition.js";
-import {RuleColumn} from "../models/rulecolumn.js"
-import {RuleRelation} from "../models/rulerelation.js"
+
 import NodeCache from "node-cache";
 const cache = new NodeCache({ stdTTL: 600 }); // cache expires in 10 minutes (600s)
 
