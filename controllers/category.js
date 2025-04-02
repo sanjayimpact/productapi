@@ -9,8 +9,7 @@ import { Variantdetail } from "../models/variantdetail.js";
 import {RuleColumn} from "../models/rulecolumn.js";
 import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
-import NodeCache from "node-cache";
-const cache = new NodeCache({ stdTTL: 300 }); // cache for 5 minutes (300s)
+
 import connectDb from "../db.js";
 
 
@@ -123,11 +122,7 @@ const allCategory = async (req, res) => {
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
     const { handle } = req.params;
-    const cacheKey = `category_${handle}_page${page}_limit${limit}`;
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      return res.json(cachedData);
-    }
+   
     let type = "Category";
 
     let existhandle = await Category.findOne({ handle }).populate({
