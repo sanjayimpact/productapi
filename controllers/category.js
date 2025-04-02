@@ -132,7 +132,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 
 
 const allCategory = async (req, res) => {
-  connectDb();
+
   try {
     const { handle } = req.params;
     const cacheKey = `category_or_product_${handle}`;
