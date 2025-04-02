@@ -10,7 +10,7 @@ const port = 4000;
 
 app.use(cors());
 
-app.use('/sanju',myrouter)
+app.use('/api',myrouter)
 
 // app.use('/api',userRouter)
 
