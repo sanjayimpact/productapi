@@ -10,10 +10,13 @@ import {RuleColumn} from "../models/rulecolumn.js";
 import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
 import NodeCache from "node-cache";
+const cache = new NodeCache({ stdTTL: 300 }); // cache for 5 minutes (300s)
 import connectDb from "../db.js";
-const cache = new NodeCache({ stdTTL: 600 }); // cache expires in 10 minutes (600s)
 
-// Helper: Fetch variant details and stock in parallel
+
+
+
+// --- Helpers remain untouched but grouped for clarity ---
 const getVariantData = async (variant) => {
   const [variantDetails, stock] = await Promise.all([
     Variantdetail.find({ variant_id: variant._id }),
@@ -33,14 +36,11 @@ const getVariantData = async (variant) => {
   };
 };
 
-// Helper: Aggregate options from variant data
 const aggregateOptions = (variants) => {
   const combinedOptions = variants.reduce((acc, variant) => acc.concat(variant.options), []);
   const groupedOptions = {};
   combinedOptions.forEach(option => {
-    // Normalize option name (if it’s an array, take the first element)
     const optionName = Array.isArray(option.name) ? option.name[0] : option.name;
-    // Normalize option values (if nested, take the proper value)
     const optionValues = Array.isArray(option.values) &&
       option.values.length > 0 &&
       Array.isArray(option.values[0])
@@ -60,10 +60,8 @@ const aggregateOptions = (variants) => {
   }));
 };
 
-// Helper: Transform a product object using its variants
 const transformProduct = (product, variants, categoryId = null) => {
   const aggregatedOptions = aggregateOptions(variants);
-
   return {
     cat_id: categoryId,
     image: product.featured_image,
@@ -75,46 +73,41 @@ const transformProduct = (product, variants, categoryId = null) => {
     handle: product.handle,
     tags: product.tags.map(tag => tag.tag_name).join(", ") || null,
     options: aggregatedOptions,
-   
     variants: variants
   };
 };
 
-// Helper: Fetch product details (variants and aggregated options)
 const getProductData = async (productExists) => {
   const variants = await Variant.find({ product_id: productExists._id });
   const variantData = await Promise.all(variants.map(getVariantData));
-  const productData = {
-    image:productExists?.
-    featured_image,
-    title: productExists.title,
-    body_html: productExists.body_html,
-    vendor: productExists.brand_name?.brand_name || null,
-    product_type: productExists.product_type?.product_type_name || null,
-    handle: productExists.handle,
-    tags: productExists.tags.map(tag => tag.tag_name).join(", ") || null,
-    options: aggregateOptions(variantData),
-    variants: variantData
+  return {
+    productData: {
+      image: productExists.featured_image,
+      title: productExists.title,
+      body_html: productExists.body_html,
+      vendor: productExists.brand_name?.brand_name || null,
+      product_type: productExists.product_type?.product_type_name || null,
+      handle: productExists.handle,
+      tags: productExists.tags.map(tag => tag.tag_name).join(", ") || null,
+      options: aggregateOptions(variantData),
+      variants: variantData
+    },
+    variantData
   };
-  return { productData, variantData };
 };
 
-// Helper: Get related products with their variants and options
 const getRelatedProducts = async (productExists, limit = 12) => {
   if (!productExists.product_type) return [];
+
   const relatedProducts = await Product.find({
     product_type: productExists.product_type._id,
     _id: { $ne: productExists._id }
-  })
-    .limit(limit)
-    .populate({ path: 'brand_name' })
-    .populate({ path: 'tags' })
-    .populate({ path: 'product_type' });
-  
-  const relatedProductIds = relatedProducts.map(product => product._id);
+  }).limit(limit).populate(['brand_name', 'tags', 'product_type']);
+
+  const relatedProductIds = relatedProducts.map(p => p._id);
   const relatedVariants = await Variant.find({ product_id: { $in: relatedProductIds } });
   const relatedVariantData = await Promise.all(relatedVariants.map(getVariantData));
-  
+
   return relatedProducts.map(product => {
     const productVariants = relatedVariantData.filter(
       variant => String(variant.product_id) === String(product._id)
@@ -123,26 +116,18 @@ const getRelatedProducts = async (productExists, limit = 12) => {
   });
 };
 
-
-
-
-
-
-
-
-
+// --- Main Controller ---
 const allCategory = async (req, res) => {
-
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
     const { handle } = req.params;
-    const cacheKey = `category_or_product_${handle}`;
-    
-    // Return from cache if exists
+    const cacheKey = `category_${handle}_page${page}_limit${limit}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
-      return res.json({ ...cachedData, cached: true });
+      return res.json(cachedData);
     }
-
     let type = "Category";
 
     let existhandle = await Category.findOne({ handle }).populate({
@@ -150,12 +135,12 @@ const allCategory = async (req, res) => {
       populate: [{ path: 'column' }, { path: 'relation' }]
     });
 
+    // If not a category, check if it is a product
     if (!existhandle) {
       type = "Product";
+
       const productExists = await Product.findOne({ handle })
-        .populate({ path: 'brand_name' })
-        .populate({ path: 'tags' })
-        .populate({ path: 'product_type' });
+        .populate(['brand_name', 'tags', 'product_type']);
 
       if (!productExists) {
         return res.json({ message: "No data found", status: false, type: null });
@@ -166,22 +151,18 @@ const allCategory = async (req, res) => {
         getRelatedProducts(productExists)
       ]);
 
-      const productData = productResult.productData;
-
-      const response = {
+      return res.json({
         success: true,
         slug: handle,
         type,
         sproduct: {
-          single_product: productData,
+          single_product: productResult.productData,
           related_product: relatedProducts
         }
-      };
-
-      cache.set(cacheKey, response); // Store in cache
-      return res.json(response);
+      });
     }
 
+    // Build filters from rules
     let filters = {};
     for (const rule of existhandle.rules) {
       let fieldName = rule.column?.name;
@@ -194,67 +175,43 @@ const allCategory = async (req, res) => {
       if (!fieldName || !relation || value === undefined) continue;
 
       switch (relation) {
-        case "equals":
-          filters[fieldName] = value;
-          break;
-        case "is not equal to":
-          filters[fieldName] = { $ne: value };
-          break;
-        case "starts with":
-          filters[fieldName] = { $regex: `^${value}`, $options: "i" };
-          break;
-        case "ends with":
-          filters[fieldName] = { $regex: `${value}$`, $options: "i" };
-          break;
-        case "contains":
-          filters[fieldName] = { $regex: value, $options: "i" };
-          break;
-        case "does not contain":
-          filters[fieldName] = { $not: { $regex: value, $options: "i" } };
-          break;
-        case "is greater than":
-          filters[fieldName] = { $gt: value };
-          break;
-        case "is less than":
-          filters[fieldName] = { $lt: value };
-          break;
-        default:
-          console.warn(`Unknown relation: ${relation}`);
-          break;
+        case "equals": filters[fieldName] = value; break;
+        case "is not equal to": filters[fieldName] = { $ne: value }; break;
+        case "starts with": filters[fieldName] = { $regex: `^${value}`, $options: "i" }; break;
+        case "ends with": filters[fieldName] = { $regex: `${value}$`, $options: "i" }; break;
+        case "contains": filters[fieldName] = { $regex: value, $options: "i" }; break;
+        case "does not contain": filters[fieldName] = { $not: { $regex: value, $options: "i" } }; break;
+        case "is greater than": filters[fieldName] = { $gt: value }; break;
+        case "is less than": filters[fieldName] = { $lt: value }; break;
+        default: console.warn(`Unknown relation: ${relation}`); break;
       }
     }
 
-    const lookupPromises = [];
-    if (filters.product_type) {
-      lookupPromises.push(
+    // Resolve references in parallel
+    await Promise.all([
+      filters.product_type &&
         ProductType.findOne({ product_type_name: filters.product_type }).then(pt => {
           if (pt) filters.product_type = pt._id;
-        })
-      );
-    }
-    if (filters.tags) {
-      lookupPromises.push(
+        }),
+      filters.tags &&
         Tag.findOne({ tag_name: filters.tags }).then(tag => {
           if (tag) filters.tags = tag._id;
-        })
-      );
-    }
-    if (filters.brand_name) {
-      lookupPromises.push(
+        }),
+      filters.brand_name &&
         Brand.findOne({ brand_name: filters.brand_name }).then(brand => {
           if (brand) filters.brand_name = brand._id;
         })
-      );
-    }
-    await Promise.all(lookupPromises);
+    ]);
 
-    const products = await Product.find(filters)
-      .populate({ path: 'brand_name' })
-      .populate({ path: 'tags' })
-      .populate({ path: 'product_type' })
-      .limit(12);
+    // Fetch products and total count in parallel
+    const [products, totalproduct] = await Promise.all([
+      Product.find(filters)
+        .populate(['brand_name', 'tags', 'product_type'])
+        .skip(skip).limit(limit).sort({ title: 1 }),
+      Product.countDocuments(filters)
+    ]);
 
-    if (!products || products.length === 0) {
+    if (!products.length) {
       return res.json({ message: "No products found", status: false, type, totalCount: 0 });
     }
 
@@ -271,18 +228,18 @@ const allCategory = async (req, res) => {
       cat_id: existhandle._id,
       cat_title: existhandle.title,
       cat_products: transformedProducts,
-      totalCount: transformedProducts.length
+      totalCount: transformedProducts.length,
+      currentPage: page,
+      totalPages: Math.ceil(totalproduct / limit),
+      totalproduct
     };
 
-    const response = {
+    return res.json({
       message: "Successfully fetched",
       status: true,
       type,
       catpros: transformedData
-    };
-
-    cache.set(cacheKey, response); // Cache final response
-    return res.json(response);
+    });
 
   } catch (err) {
     console.error("Error fetching product:", err);
@@ -290,7 +247,4 @@ const allCategory = async (req, res) => {
   }
 };
 
-
 export default allCategory;
-
-
