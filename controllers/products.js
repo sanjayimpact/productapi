@@ -8,7 +8,6 @@ import { Brand } from "../models/brand.js";
 import mongoose from "mongoose";
 export const allproducts = async (req, res) => {
   try {
-    
     const {
       page = 1,
       limit = 50,
@@ -20,9 +19,6 @@ export const allproducts = async (req, res) => {
       types: rawTypes = [],
       status: rawStatus = [],
     } = req.query;
-    
-
-
 
     const selectedBrands = Array.isArray(rawBrands) ? rawBrands : [rawBrands].filter(Boolean);
     const selectedTypes = Array.isArray(rawTypes) ? rawTypes : [rawTypes].filter(Boolean);
@@ -31,81 +27,121 @@ export const allproducts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const sortOrder = order === "asc" ? 1 : -1;
 
-    // You should extract this from req.user after authenticating
-    const shopId = req.user?.shopId || "67c56189e4285a7d8c487efb";
+    const shopId = req.user?.shopId || new mongoose.Types.ObjectId("67c56189e4285a7d8c487efb");
 
-    // ✅ Construct Query Object
-    let query = { shop_id: shopId };
+    // Construct match query
+    let matchQuery = { shop_id: shopId };
+    if (search) matchQuery.title = { $regex: search, $options: "i" };
+    if (selectedTag) matchQuery.tags = new mongoose.Types.ObjectId(selectedTag);
+    if (selectedBrands.length) matchQuery.brand = { $in: selectedBrands.map((id) => id.trim()) };
+    if (selectedTypes.length) matchQuery.product_type_name = { $in: selectedTypes.map((id) => id.trim()) };
+    if (selectedStatus.length) matchQuery.product_status = { $in: selectedStatus };
 
-    if (search) query.title = { $regex: search, $options: "i" };
-    if (selectedTag) query.tags = selectedTag;
-    if (selectedBrands.length > 0) query.brand = { $in: selectedBrands.map((id) => id.trim()) };
-    if (selectedTypes.length > 0) query.product_type_name = { $in: selectedTypes.map((id) => id.trim()) };
-    if (selectedStatus.length > 0) query.product_status = { $in: selectedStatus };
+    // Construct sort object
+    const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" ? sort : "createdAt";
+    const sortQuery = { [sortField]: sortOrder };
 
-    // ✅ Sort Query
-  
-    let sortQuery = {};
-    if (sort === "title" || sort === "createdAt" || sort === "updatedAt") {
-      sortQuery[sort] = sortOrder;
-    }
+    // Get total count
+    const totalProducts = await Product.countDocuments(matchQuery);
 
-    // ✅ Total count after filtering
-    const totalProducts = await Product.countDocuments(query);
+    // Aggregation
+    const products = await Product.aggregate([
+      { $match: matchQuery },
+      {
+        $project: {
+          publish_status: 0,
+          meta_title: 0,
+          meta_description: 0,
+          body_html: 0,
+          shop_id: 0,
+          brand_name: 0,
+          product_type: 0,
+          product_id: 0,
+          tags: 0,
+        },
+      },
+      { $sort: sortQuery },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from: "variants",
+          let: { productId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $eq: ["$product_id", "$$productId"] }, { $eq: ["$isVariandetails", 1] }] } } },
+            {
+              $lookup: {
+                from: "variantdetails",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "variantDetails",
+              },
+            },
+            {
+              $lookup: {
+                from: "stocks",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "stockData",
+              },
+            },
+            {
+              $addFields: {
+                Stock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+              },
+            },
+            { $project: { stockData: 0 } },
+          ],
+          as: "variants",
+        },
+      },
+      {
+        $lookup: {
+          from: "variants",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$product_id", "$$productId"] }, { $eq: ["$isdefault", true] }],
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "stocks",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "stockData",
+              },
+            },
+            {
+              $addFields: {
+                defaultstock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+              },
+            },
+            { $project: { stockData: 0 } },
+          ],
+          as: "defaultVariant",
+        },
+      },
+      {
+        $addFields: {
+          defaultstock: {
+            $cond: {
+              if: { $gt: [{ $size: "$defaultVariant" }, 0] },
+              then: { $arrayElemAt: ["$defaultVariant.defaultstock", 0] },
+              else: 0,
+            },
+          },
+        },
+      },
+      { $project: { defaultVariant: 0 } },
+    ]);
 
-    // ✅ Fetch filtered products
-    const products = await Product.find(query,{publish_status:0,meta_title:0,meta_description:0,body_html:0,shop_id:0,brand_name:0,product_type:0,product_id:0,tags:0})
-      .sort(sortQuery)
-      .skip(skip)
-      .limit(parseInt(limit))
-
-  
-   
-    // ✅ Process Variants and Stock
-    const responseData = await Promise.all(
-      products.map(async (product) => {
-        const variants = await Variant.find({
-          product_id: product._id,
-          isVariandetails: 1,
-        });
-
-        const defaultVariant = await Variant.findOne({
-          product_id: product._id,
-          isdefault: true,
-        });
-
-        let defaultstock = 0;
-        if (defaultVariant) {
-          const stockEntry = await Stock.findOne({ variant_id: defaultVariant._id });
-          defaultstock = stockEntry ? stockEntry.quantity : 0;
-        }
-
-        const variantData = await Promise.all(
-          variants.map(async (variant) => {
-            const variantDetails = await Variantdetail.find({ variant_id: variant._id });
-            const stockEntry = await Stock.findOne({ variant_id: variant._id });
-            const variantStock = stockEntry ? stockEntry.quantity : 0;
-
-            return {
-              ...variant._doc,
-              variantDetails,
-              Stock: variantStock,
-            };
-          })
-        );
-
-        return {
-          defaultstock,
-          ...product._doc,
-          variants: variantData,
-        };
-      })
-    );
-
-    // ✅ Final response
     return res.json({
       message: "Successfully fetched",
-      data: responseData,
+      data: products,
       currentPage: parseInt(page),
       totalPages: Math.ceil(totalProducts / limit),
       totalProducts,
