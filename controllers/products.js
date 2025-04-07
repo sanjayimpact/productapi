@@ -38,7 +38,7 @@ export const allproducts = async (req, res) => {
     if (selectedStatus.length) matchQuery.product_status = { $in: selectedStatus };
 
     // Construct sort object
-    const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" ? sort : "createdAt";
+    const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" ? sort : "title";
     const sortQuery = { [sortField]: sortOrder };
 
     // Get total count
