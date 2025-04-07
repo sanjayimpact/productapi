@@ -54,7 +54,7 @@ export const allproducts = async (req, res) => {
     const totalProducts = await Product.countDocuments(query);
 
     // ✅ Fetch filtered products
-    const products = await Product.find(query)
+    const products = await Product.find(query,{publish_status:0,meta_title:0,meta_description:0,body_html:0,shop_id:0,brand_name:0,product_type:0,product_id:0,tags:0})
       .sort(sortQuery)
       .skip(skip)
       .limit(parseInt(limit))
