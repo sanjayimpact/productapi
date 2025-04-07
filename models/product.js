@@ -58,12 +58,7 @@ const productSchema = new mongoose.Schema({
     index:true
   },
 
-  tags: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Tag',
-    default: [],
-    index: true  // ✅ Filter/search by tags
-  }],
+
   product_type: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductType',
@@ -72,7 +67,12 @@ const productSchema = new mongoose.Schema({
   product_id: {
     type: Number,
     index: true  // ✅ External sync (like Shopify) or custom ID search
-  }
+  }, tags: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tag',
+    default: [],
+   
+  }],
 
 }, { timestamps: true });
 

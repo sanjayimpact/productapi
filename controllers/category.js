@@ -11,6 +11,7 @@ import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
 
 import connectDb from "../db.js";
+import { Aggregate } from "mongoose";
 
 
 
@@ -202,12 +203,33 @@ const allCategory = async (req, res) => {
    
 
     // Fetch products
-    const [products, totalproduct] = await Promise.all([
-      Product.find(filters)
-        .populate("tags")
-        .skip(skip).limit(limit).sort({ title: 1 }),
-      Product.countDocuments(filters)
+    const [result] = await Product.aggregate([
+      { $match: filters },
+      {
+        $lookup: {
+          from: "tags",
+          localField: "tags",
+          foreignField: "_id",
+          as: "tags"
+        }
+      },
+      {
+        $facet: {
+          products: [
+            { $sort: { title: 1 } },
+            { $skip: skip },
+            { $limit: limit }
+          ],
+          totalCount: [
+            { $count: "count" }
+          ]
+        }
+      }
     ]);
+    
+    const products = result?.products || [];
+    const totalproduct = result?.totalCount?.[0]?.count || 0;
+    
 
     if (!products.length) {
       return res.json({
