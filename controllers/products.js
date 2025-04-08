@@ -7,6 +7,12 @@ import { ProductType } from "../models/product_type.js";
 import { Brand } from "../models/brand.js";
 import mongoose from "mongoose";
 export const allproducts = async (req, res) => {
+  const shopid = req.get("Authorization"); // or req.headers['authorization']
+
+ const myId = shopid?.split(" ")[1]; // Extract the shopId from the token
+  if(!myId){
+    return res.status(401).json({ message: "Unauthorized access" });
+  }
   try {
     const {
       page = 1,
@@ -14,7 +20,7 @@ export const allproducts = async (req, res) => {
       search = "",
       tag: selectedTag = "",
       sort,
-      order = "desc",
+      order = "asc",
       brands: rawBrands = [],
       types: rawTypes = [],
       status: rawStatus = [],
@@ -27,7 +33,7 @@ export const allproducts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const sortOrder = order === "asc" ? 1 : -1;
 
-    const shopId = req.user?.shopId || new mongoose.Types.ObjectId("67c56189e4285a7d8c487efb");
+    const shopId = new mongoose.Types.ObjectId(myId);
 
     // Construct match query
     let matchQuery = { shop_id: shopId };
