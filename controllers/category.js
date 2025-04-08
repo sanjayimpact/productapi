@@ -10,8 +10,7 @@ import {RuleColumn} from "../models/rulecolumn.js";
 import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
 
-import connectDb from "../db.js";
-import { Aggregate } from "mongoose";
+
 
 
 
@@ -63,6 +62,7 @@ const aggregateOptions = (variants) => {
 const transformProduct = (product, variants, categoryId = null) => {
 
   const aggregatedOptions = aggregateOptions(variants);
+  const variantImages = variants.map(variant => variant.variant_image).filter(Boolean);
   return {
     cat_id: categoryId,
     image: product.featured_image,
@@ -74,6 +74,8 @@ const transformProduct = (product, variants, categoryId = null) => {
     product_type: product.product_type_name || null,
     handle: product.handle,
     tags: product.tags.map(tag => tag.tag_name).join(", ") || null,
+    images: variantImages,
+  
     options: aggregatedOptions,
     variants: variants
   };
@@ -85,6 +87,7 @@ const getProductData = async (productExists) => {
   return {
     productData: {
       image: productExists.featured_image,
+      pro_id: productExists._id,
       title: productExists.title,
       brand:productExists?.brand,
       body_html: productExists.body_html,
