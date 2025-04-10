@@ -98,7 +98,7 @@ export const categorylist = async(req,res)=>{
                   `http://localhost:4000/api/countpro/${category.handle}`
                 );
                 totalProductCount = resp.data.totalproduct || 0;
-                 console.log(totalProductCount);
+     
               } catch (err) {
                 console.error('Error counting smart category products:', err.message);
               }
