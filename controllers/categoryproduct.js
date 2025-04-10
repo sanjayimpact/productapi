@@ -70,7 +70,7 @@ const transformProduct = (product, variants, categoryId = null) => {
     pro_id: product._id,
     title: product.title,
     body_html: product.body_html,
-
+    status:product?.product_status,
     vendor: product.brand || null,
     product_type: product.product_type_name || null,
     handle: product.handle,
@@ -94,7 +94,8 @@ const getProductData = async (productExists) => {
       body_html: productExists.body_html,
       vendor: productExists.brand || null,
       product_type: productExists.product_type_name || null,
-      handle: productExists.handle,
+      status:productExists?.product_status,
+       handle: productExists.handle,
       tags: productExists.tags.map(tag => tag.tag_name).join(", ") || null,
       options: aggregateOptions(variantData),
       variants: variantData
