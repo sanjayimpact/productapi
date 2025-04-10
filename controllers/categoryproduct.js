@@ -64,6 +64,11 @@ const transformProduct = (product, variants, categoryId = null) => {
 
   const aggregatedOptions = aggregateOptions(variants);
   const variantImages = variants.map(variant => variant.variant_image).filter(Boolean);
+  const totalPrice = variants.reduce((acc, variant) => {
+    const price = parseFloat(variant?.price) || 0;
+    return acc + price;
+  }, 0);
+  
   return {
     cat_id: categoryId,
     image: product.featured_image,
@@ -76,7 +81,8 @@ const transformProduct = (product, variants, categoryId = null) => {
     handle: product.handle,
     tags: product.tags.map(tag => tag.tag_name).join(", ") || null,
     images: variantImages,
-  
+    created_at: product.createdAt,
+     totalPrice: totalPrice,
     options: aggregatedOptions,
     variants: variants
   };
@@ -96,6 +102,7 @@ const getProductData = async (productExists) => {
       product_type: productExists.product_type_name || null,
       status:productExists?.product_status,
        handle: productExists.handle,
+       created_at: productExists.createdAt,
       tags: productExists.tags.map(tag => tag.tag_name).join(", ") || null,
       options: aggregateOptions(variantData),
       variants: variantData
