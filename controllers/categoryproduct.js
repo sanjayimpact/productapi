@@ -9,6 +9,7 @@ import { Variantdetail } from "../models/variantdetail.js";
 import {RuleColumn} from "../models/rulecolumn.js";
 import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
+import mongoose from "mongoose";
 
 
 
@@ -123,7 +124,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 };
 
 // --- Main Controller ---
-const allCategory = async (req, res) => {
+export const allCategory = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
@@ -276,5 +277,120 @@ const allCategory = async (req, res) => {
   }
 };
 
+export const productcount = async (req, res) => {
+  try {
+    const { handle } = req.params;
 
-export default allCategory;
+    const existhandle = await Category.findOne({ handle }).populate({
+      path: 'rules',
+      populate: [{ path: 'column' }, { path: 'relation' }],
+    });
+
+    if (!existhandle) {
+      return res.json({
+        message: 'Category not found',
+        status: false,
+        totalproduct: 0,
+      });
+    }
+
+    const matchStage = {};
+    const orLookups = [];
+    let forceNoMatch = false; // Flag to force match nothing
+
+
+    for (const rule of existhandle.rules) {
+      let fieldName = rule.column?.name;
+      const relation = rule.relation?.name;
+      const value = rule.value;
+
+      if (!fieldName || !relation || value === undefined) continue;
+
+      if (fieldName === 'type') fieldName = 'product_type_name';
+      else if (fieldName === 'tag') fieldName = 'tags';
+      else if (fieldName === 'vendor') fieldName = 'brand';
+
+      if ([ 'tags'].includes(fieldName)) {
+        let model, localField;
+
+      if (fieldName === 'tags') {
+          model = Tag;
+          localField = 'tag_name';
+        }
+
+        const refDoc = await model.findOne({ [localField]: value });
+        if (!refDoc) {
+          forceNoMatch = true; // No matching reference
+          break;
+        }
+        const objectId = new mongoose.Types.ObjectId(refDoc._id);
+
+        switch (relation) {
+          case 'equals':
+            matchStage[fieldName] = objectId;
+            break;
+          case 'is not equal to':
+            matchStage[fieldName] = { $ne: objectId };
+            break;
+          default:
+            console.warn(`Unsupported relation on ObjectId: ${relation}`);
+            break;
+        }
+      } else {
+        switch (relation) {
+          case 'equals':
+            matchStage[fieldName] = value;
+            break;
+          case 'is not equal to':
+            matchStage[fieldName] = { $ne: value };
+            break;
+          case 'starts with':
+            matchStage[fieldName] = { $regex: `^${value}`, $options: 'i' };
+            break;
+          case 'ends with':
+            matchStage[fieldName] = { $regex: `${value}$`, $options: 'i' };
+            break;
+          case 'contains':
+            matchStage[fieldName] = { $regex: value, $options: 'i' };
+            break;
+          case 'does not contain':
+            matchStage[fieldName] = { $not: { $regex: value, $options: 'i' } };
+            break;
+          case 'is greater than':
+            matchStage[fieldName] = { $gt: value };
+            break;
+          case 'is less than':
+            matchStage[fieldName] = { $lt: value };
+            break;
+          default:
+            console.warn(`Unknown relation: ${relation}`);
+            break;
+        }
+      }
+    }
+    if (forceNoMatch) {
+      // Forcefully make the filter impossible to match
+      matchStage._id = { $exists: false };
+    }
+    const aggregationPipeline = [
+      { $match: matchStage },
+      { $count: 'totalproduct' }
+    ];
+
+    const result = await Product.aggregate(aggregationPipeline).exec();
+    const totalproduct = result[0]?.totalproduct || 0;
+
+    return res.json({
+      message: 'Successfully fetched',
+      status: true,
+      totalproduct,
+    });
+  } catch (err) {
+    console.error('Error fetching product count:', err);
+    return res.status(500).json({
+      message: err.message,
+      status: false,
+      totalproduct: 0,
+    });
+  }
+};
