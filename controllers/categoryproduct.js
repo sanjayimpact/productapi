@@ -139,6 +139,7 @@ export const allCategory = async (req, res) => {
     const skip = (page - 1) * limit;
     const { handle } = req.params;
 
+
     let type = "Category";
 
     // Check if handle belongs to a category
@@ -181,6 +182,7 @@ export const allCategory = async (req, res) => {
       let field = rule.column?.name;
       const relation = rule.relation?.name;
       const value = rule.value;
+     
 
       if (!field || !relation || value === undefined) continue;
 
@@ -189,7 +191,7 @@ export const allCategory = async (req, res) => {
         case "tag": field = "tags"; break;
         case "vendor": field = "brand"; break;
       }
-
+    
       switch (relation) {
         case "equals": filters[field] = value; break;
         case "is not equal to": filters[field] = { $ne: value }; break;
@@ -202,17 +204,19 @@ export const allCategory = async (req, res) => {
         default: break;
       }
     }
-
+    
     // Resolve references
     const [tagDoc] = await Promise.all([
       filters.product_type ? Product.findOne({ product_type_name: filters.product_type }) : null,
-      filters.tags ? Tag.findOne({ tag_name: filters.tags }) : null,
+      filters.tags ? Tag.findOne({ tag_name:filters.tags}) : null,
       filters.brand_name ? Product.findOne({ brand: filters.brand_name }) : null
     ]);
+    console.log(filters.tags);
+let find = await Tag.findOne({tag_name:filters.tags});
 
     
-    if (tagDoc) filters.tags = tagDoc._id;
-   
+    if (find) filters.tags = find._id;
+
 
     // Fetch products
     const [result] = await Product.aggregate([
