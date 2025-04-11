@@ -95,7 +95,7 @@ export const categorylist = async(req,res)=>{
             if (category.category_type === 'smart') {
               try {
                 const resp = await axios.get(
-                  `http://localhost:4000/api/countpro/${category.handle}`
+                  `https://testadminapi.hopto.org/api/countpro/${category.handle}`
                 );
                 totalProductCount = resp.data.totalproduct || 0;
      
