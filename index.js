@@ -8,7 +8,7 @@ import { productRouter } from './routes/allproduct.js';
 import { categoryRouter } from './routes/categories.js';
 
 const app = express();
-const port = 4000;
+const port = 3000;
 app.use(compression());
 
 app.use(cors());
