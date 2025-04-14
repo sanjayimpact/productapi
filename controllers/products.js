@@ -24,8 +24,10 @@ export const allproducts = async (req, res) => {
       brands: rawBrands = [],
       types: rawTypes = [],
       status: rawStatus = [],
+     
     } = req.query;
-
+  let{filter} = req.query;
+  
     const selectedBrands = Array.isArray(rawBrands) ? rawBrands : [rawBrands].filter(Boolean);
     const selectedTypes = Array.isArray(rawTypes) ? rawTypes : [rawTypes].filter(Boolean);
     const selectedStatus = Array.isArray(rawStatus) ? rawStatus : [rawStatus].filter(Boolean);
@@ -34,9 +36,16 @@ export const allproducts = async (req, res) => {
     const sortOrder = order === "asc" ? 1 : -1;
 
     const shopId = new mongoose.Types.ObjectId(myId);
+   
 
     // Construct match query
-    let matchQuery = { shop_id: shopId };
+    const matchQuery = {
+      shop_id: shopId,
+      ...(filter && filter !== "All" && {
+        product_status: filter === "Archived" ? "Archive" : filter,
+      }),
+    };
+    
     if (search) matchQuery.title = { $regex: search, $options: "i" };
     if (selectedTag) matchQuery.tags = new mongoose.Types.ObjectId(selectedTag);
     if (selectedBrands.length) matchQuery.brand = { $in: selectedBrands.map((id) => id.trim()) };
@@ -143,7 +152,7 @@ export const allproducts = async (req, res) => {
         },
       },
       { $project: { defaultVariant: 0 } },
-    ]).sort({title:1});
+    ]);
 
     return res.json({
       message: "Successfully fetched",
