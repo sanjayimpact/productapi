@@ -143,7 +143,7 @@ export const allproducts = async (req, res) => {
         },
       },
       { $project: { defaultVariant: 0 } },
-    ]);
+    ]).sort({title:1});
 
     return res.json({
       message: "Successfully fetched",
