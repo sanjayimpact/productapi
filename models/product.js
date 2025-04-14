@@ -13,12 +13,12 @@ const productSchema = new mongoose.Schema({
     index: true,  // ✅ Used in URLs / slugs
     unique: true  // 🔐 Optional: ensure unique handles
   },
-  publish_status: {
-    type: String,
-    trim: true,
-    enum: ['Online Store', 'Other'],
-    index: true  // ✅ Filter by publish status
-  },
+  publish_status:[{
+    type:String,
+  trim:true,
+  
+  
+      }],
   meta_title: {
     type: String,
     trim: true

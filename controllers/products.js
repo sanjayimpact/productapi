@@ -157,3 +157,117 @@ export const allproducts = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+  export const getproductbyid = async(req,res)=>{
+    try {
+      const { id } = req.params;
+  
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(422).json({ message: "Valid product ID is required", data: [] });
+      }
+  
+      // ✅ Aggregate Product with brand_name, tags, product_type populated
+      const productAgg = await Product.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      
+        // Convert comma-separated publish_status string to array
+        {
+          $addFields: {
+            publish_status: {
+              $cond: {
+                if: { $isArray: "$publish_status" },
+                then: "$publish_status",
+                else: {
+                  $cond: {
+                    if: { $ne: ["$publish_status", null] },
+                    then: { $split: ["$publish_status", ","] },
+                    else: []
+                  }
+                }
+              }
+            }
+          }
+        },
+      
+        {
+          $lookup: {
+            from: "brands",
+            localField: "brand_name",
+            foreignField: "_id",
+            as: "brand_name",
+          },
+        },
+        { $unwind: { path: "$brand_name", preserveNullAndEmptyArrays: true } },
+      
+        {
+          $lookup: {
+            from: "tags",
+            localField: "tags",
+            foreignField: "_id",
+            as: "tags",
+          },
+        },
+      
+        {
+          $lookup: {
+            from: "producttypes",
+            localField: "product_type",
+            foreignField: "_id",
+            as: "product_type",
+          },
+        },
+        { $unwind: { path: "$product_type", preserveNullAndEmptyArrays: true } },
+      ]);
+  
+      if (!productAgg || productAgg.length === 0) {
+        return res.status(200).json({ message: "Product not found", data: [] });
+      }
+  
+      const product = productAgg[0];
+  
+      // ✅ Aggregate variants, their details and stock
+      const variantAgg = await Variant.aggregate([
+        { $match: { product_id: new mongoose.Types.ObjectId(id) } },
+  
+        {
+          $lookup: {
+            from: "variantdetails",
+            localField: "_id",
+            foreignField: "variant_id",
+            as: "variantDetails",
+          },
+        },
+        {
+          $lookup: {
+            from: "stocks",
+            localField: "_id",
+            foreignField: "variant_id",
+            as: "stockInfo",
+          },
+        },
+        {
+          $addFields: {
+            stock: {
+              $ifNull: [{ $arrayElemAt: ["$stockInfo.quantity", 0] }, 0],
+            },
+            stockId: { $arrayElemAt: ["$stockInfo._id", 0] },
+            location_id: { $arrayElemAt: ["$stockInfo.location_id", 0] },
+          },
+        },
+        { $project: { stockInfo: 0 } }, // Clean up
+      ]);
+  
+      const responseData = {
+        ...product,
+        variants: variantAgg,
+      };
+  
+      return res.status(200).json({
+        message: "Successfully fetched",
+        data: responseData,
+      });
+    } catch (err) {
+      console.error("Error fetching product:", err);
+      return res.status(500).json({ message: err.message });
+    }
+  }
