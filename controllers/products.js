@@ -6,7 +6,9 @@ import { Tag } from "../models/tags.js";
 import { ProductType } from "../models/product_type.js";
 import { Brand } from "../models/brand.js";
 import mongoose from "mongoose";
+import connectDb from "../db.js";
 export const allproducts = async (req, res) => {
+  await connectDb();
   const shopid = req.get("Authorization"); // or req.headers['authorization']
 
  const myId = shopid?.split(" ")[1]; // Extract the shopId from the token

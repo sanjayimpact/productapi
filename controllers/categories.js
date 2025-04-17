@@ -11,9 +11,11 @@ import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
 import mongoose from "mongoose";
 import axios from "axios";
+import connectDb from "../db.js";
 
 
 export const categorylist = async(req,res)=>{
+  await connectDb();
     try {
         
     

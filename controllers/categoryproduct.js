@@ -9,6 +9,7 @@ import { Variantdetail } from "../models/variantdetail.js";
 import {RuleColumn} from "../models/rulecolumn.js";
 import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
+import connectDb from "../db.js";
 import mongoose from "mongoose";
 
 
@@ -133,6 +134,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 
 // --- Main Controller ---
 export const allCategory = async (req, res) => {
+  await connectDb();
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
@@ -290,6 +292,7 @@ let find = await Tag.findOne({tag_name:filters.tags});
 };
 
 export const productcount = async (req, res) => {
+  await connectDb();
   try {
     const { handle } = req.params;
 
