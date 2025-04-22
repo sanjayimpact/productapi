@@ -133,6 +133,163 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 };
 
 // --- Main Controller ---
+// export const allCategory = async (req, res) => {
+//   await connectDb();
+//   try {
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = parseInt(req.query.limit) || 12;
+//     const skip = (page - 1) * limit;
+//     const { handle } = req.params;
+
+
+//     let type = "Category";
+
+//     // Check if handle belongs to a category
+//     let existhandle = await Category.findOne({ handle }).populate({
+//       path: "rules",
+//       populate: [{ path: "column" }, { path: "relation" }]
+//     });
+
+//     // If not category, check if it's a product
+//     if (!existhandle) {
+//       type = "Product";
+
+//       const productExists = await Product.findOne({ handle })
+//         .populate( "tags");
+
+//       if (!productExists) {
+//         return res.json({ message: "No data found", status: false, type: null });
+//       }
+
+//       const [productResult, relatedProducts] = await Promise.all([
+//         getProductData(productExists),
+//         getRelatedProducts(productExists)
+//       ]);
+
+//       return res.json({
+//         success: true,
+//         slug: handle,
+//         type,
+//         sproduct: {
+//           single_product: productResult.productData,
+//           related_product: relatedProducts
+//         }
+//       });
+//     }
+
+//     // Construct filters from rules
+//     let filters = {};
+
+//     for (const rule of existhandle.rules) {
+//       let field = rule.column?.name;
+//       const relation = rule.relation?.name;
+//       const value = rule.value;
+     
+
+//       if (!field || !relation || value === undefined) continue;
+
+//       switch (field) {
+//         case "type": field = "product_type_name"; break;
+//         case "tag": field = "tags"; break;
+//         case "vendor": field = "brand"; break;
+//       }
+    
+//       switch (relation) {
+//         case "equals": filters[field] = value; break;
+//         case "is not equal to": filters[field] = { $ne: value }; break;
+//         case "starts with": filters[field] = { $regex: `^${value}`, $options: "i" }; break;
+//         case "ends with": filters[field] = { $regex: `${value}$`, $options: "i" }; break;
+//         case "contains": filters[field] = { $regex: value, $options: "i" }; break;
+//         case "does not contain": filters[field] = { $not: { $regex: value, $options: "i" } }; break;
+//         case "is greater than": filters[field] = { $gt: value }; break;
+//         case "is less than": filters[field] = { $lt: value }; break;
+//         default: break;
+//       }
+//     }
+    
+//     // Resolve references
+//     const [tagDoc] = await Promise.all([
+//       filters.product_type ? Product.findOne({ product_type_name: filters.product_type }) : null,
+//       filters.tags ? Tag.findOne({ tag_name:filters.tags}) : null,
+//       filters.brand_name ? Product.findOne({ brand: filters.brand_name }) : null
+//     ]);
+   
+// let find = await Tag.findOne({tag_name:filters.tags});
+
+    
+//     if (find) filters.tags = find._id;
+
+
+//     // Fetch products
+//     const [result] = await Product.aggregate([
+//       { $match: filters },
+//       {
+//         $lookup: {
+//           from: "tags",
+//           localField: "tags",
+//           foreignField: "_id",
+//           as: "tags"
+//         }
+//       },
+//       {
+//         $facet: {
+//           products: [
+//             { $sort: { title: 1 } },
+//             { $skip: skip },
+//             { $limit: limit }
+//           ],
+//           totalCount: [
+//             { $count: "count" }
+//           ]
+//         }
+//       }
+//     ]);
+    
+//     const products = result?.products || [];
+//     const totalproduct = result?.totalCount?.[0]?.count || 0;
+    
+
+//     if (!products.length) {
+//       return res.json({
+//         message: "No products found",
+//         status: false,
+//         type,
+//         totalCount: 0
+//       });
+//     }
+
+//     const productIds = products.map(p => p._id);
+//     const variants = await Variant.find({ product_id: { $in: productIds } });
+//     const variantData = await Promise.all(variants.map(getVariantData));
+
+//     const transformedProducts = products.map(product => {
+//       const productVariants = variantData.filter(v => String(v.product_id) === String(product._id));
+    
+//       return transformProduct(product, productVariants, existhandle._id);
+//     });
+
+//     const transformedData = {
+//       cat_id: existhandle._id,
+//       cat_title: existhandle.title,
+//       cat_products: transformedProducts,
+//       totalCount: transformedProducts.length,
+//       currentPage: page,
+//       totalPages: Math.ceil(totalproduct / limit),
+//       totalproduct
+//     };
+
+//     return res.json({
+//       message: "Successfully fetched",
+//       status: true,
+//       type,
+//       catpros: transformedData
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching product:", err);
+//     return res.status(500).json({ message: err.message, status: false });
+//   }
+// };
 export const allCategory = async (req, res) => {
   await connectDb();
   try {
@@ -141,26 +298,20 @@ export const allCategory = async (req, res) => {
     const skip = (page - 1) * limit;
     const { handle } = req.params;
 
-
     let type = "Category";
 
-    // Check if handle belongs to a category
-    let existhandle = await Category.findOne({ handle }).populate({
-      path: "rules",
-      populate: [{ path: "column" }, { path: "relation" }]
-    });
+    // Try finding the category and product in parallel
+    const [existhandle, productExists] = await Promise.all([
+      Category.findOne({ handle }).populate({
+        path: "rules",
+        populate: [{ path: "column" }, { path: "relation" }]
+      }),
+      Product.findOne({ handle }).populate("tags")
+    ]);
 
-    // If not category, check if it's a product
-    if (!existhandle) {
+    // === Product Handler ===
+    if (!existhandle && productExists) {
       type = "Product";
-
-      const productExists = await Product.findOne({ handle })
-        .populate( "tags");
-
-      if (!productExists) {
-        return res.json({ message: "No data found", status: false, type: null });
-      }
-
       const [productResult, relatedProducts] = await Promise.all([
         getProductData(productExists),
         getRelatedProducts(productExists)
@@ -177,14 +328,16 @@ export const allCategory = async (req, res) => {
       });
     }
 
-    // Construct filters from rules
-    let filters = {};
+    if (!existhandle) {
+      return res.json({ message: "No data found", status: false, type: null });
+    }
 
+    // === Category Handler ===
+    let filters = {};
     for (const rule of existhandle.rules) {
       let field = rule.column?.name;
       const relation = rule.relation?.name;
       const value = rule.value;
-     
 
       if (!field || !relation || value === undefined) continue;
 
@@ -193,7 +346,7 @@ export const allCategory = async (req, res) => {
         case "tag": field = "tags"; break;
         case "vendor": field = "brand"; break;
       }
-    
+
       switch (relation) {
         case "equals": filters[field] = value; break;
         case "is not equal to": filters[field] = { $ne: value }; break;
@@ -203,24 +356,16 @@ export const allCategory = async (req, res) => {
         case "does not contain": filters[field] = { $not: { $regex: value, $options: "i" } }; break;
         case "is greater than": filters[field] = { $gt: value }; break;
         case "is less than": filters[field] = { $lt: value }; break;
-        default: break;
       }
     }
-    
-    // Resolve references
-    const [tagDoc] = await Promise.all([
-      filters.product_type ? Product.findOne({ product_type_name: filters.product_type }) : null,
-      filters.tags ? Tag.findOne({ tag_name:filters.tags}) : null,
-      filters.brand_name ? Product.findOne({ brand: filters.brand_name }) : null
-    ]);
-    console.log(filters.tags);
-let find = await Tag.findOne({tag_name:filters.tags});
 
-    
-    if (find) filters.tags = find._id;
+    // === Replace Tag Name with ID (Only if tag filter is used) ===
+    if (filters.tags && typeof filters.tags === "string") {
+      const tagDoc = await Tag.findOne({ tag_name: filters.tags }).select("_id");
+      if (tagDoc) filters.tags = tagDoc._id;
+    }
 
-
-    // Fetch products
+    // === Aggregation with pagination ===
     const [result] = await Product.aggregate([
       { $match: filters },
       {
@@ -244,10 +389,9 @@ let find = await Tag.findOne({tag_name:filters.tags});
         }
       }
     ]);
-    
+
     const products = result?.products || [];
     const totalproduct = result?.totalCount?.[0]?.count || 0;
-    
 
     if (!products.length) {
       return res.json({
@@ -259,12 +403,22 @@ let find = await Tag.findOne({tag_name:filters.tags});
     }
 
     const productIds = products.map(p => p._id);
-    const variants = await Variant.find({ product_id: { $in: productIds } });
-    const variantData = await Promise.all(variants.map(getVariantData));
+
+    // === Fetch Variants and VariantDetails + Stock in parallel ===
+    const [variants, variantData] = await Promise.all([
+      Variant.find({ product_id: { $in: productIds } }),
+      Promise.all(productIds.map(async id => {
+        const productVariants = await Variant.find({ product_id: id });
+        return Promise.all(productVariants.map(getVariantData));
+      }))
+    ]);
+
+    const flattenedVariants = variantData.flat();
 
     const transformedProducts = products.map(product => {
-      const productVariants = variantData.filter(v => String(v.product_id) === String(product._id));
-    
+      const productVariants = flattenedVariants.filter(
+        v => String(v.product_id) === String(product._id)
+      );
       return transformProduct(product, productVariants, existhandle._id);
     });
 
