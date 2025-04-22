@@ -185,7 +185,7 @@ shop_id,
           })
         };
     
-        const result = await ProductType.aggregate([
+        const result = await brands.aggregate([
           { $match: matchStage },
           {
             $facet: {
