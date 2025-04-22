@@ -1,7 +1,8 @@
 
 import express from 'express';
-import { categorylist } from '../controllers/categories.js';
+import { categorylist, getCategoryById } from '../controllers/categories.js';
 export const categoryRouter = express.Router();
 
 
 categoryRouter.get('/',categorylist)
+categoryRouter.get('/:id',getCategoryById)

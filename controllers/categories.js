@@ -97,7 +97,7 @@ export const categorylist = async(req,res)=>{
             if (category.category_type === 'smart') {
               try {
                 const resp = await axios.get(
-                  `https://testadminapi.hopto.org/api/countpro/${category.handle}`
+                  `https://adapis.truewebcart.com/api/countpro/${category.handle}`
                 );
                 totalProductCount = resp.data.totalproduct || 0;
      
@@ -129,3 +129,144 @@ export const categorylist = async(req,res)=>{
         return res.status(500).json({ success: false, message: error.message });
       }
 }
+
+// get category by id
+export const getCategoryById = async (req, res) => {
+
+  const { id } = req.params;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, error: 'Invalid category ID' });
+    }
+
+    const categoryData = await Category.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+
+      // Lookup products
+      {
+        $lookup: {
+          from: 'products', // collection name in MongoDB
+          localField: 'products_id',
+          foreignField: '_id',
+          as: 'products_id',
+        },
+      },
+
+      // Lookup rules
+      {
+        $lookup: {
+          from: 'ruleconditions',
+          localField: 'rules',
+          foreignField: '_id',
+          as: 'rules',
+        },
+      },
+
+      // Lookup columns for each rule
+      {
+        $lookup: {
+          from: 'rulecolumns',
+          localField: 'rules.column',
+          foreignField: '_id',
+          as: 'columns',
+        },
+      },
+
+      // Lookup relations for each rule
+      {
+        $lookup: {
+          from: 'rulerelations',
+          localField: 'rules.relation',
+          foreignField: '_id',
+          as: 'relations',
+        },
+      },
+
+      // Add formatted rules
+      {
+        $addFields: {
+          rules: {
+            $map: {
+              input: '$rules',
+              as: 'rule',
+              in: {
+                rule_id: '$$rule.column',
+                rule_name: {
+                  $arrayElemAt: [
+                    {
+                      $map: {
+                        input: '$columns',
+                        as: 'col',
+                        in: {
+                          $cond: [
+                            { $eq: ['$$col._id', '$$rule.column'] },
+                            '$$col.name',
+                            null,
+                          ],
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+                relation_id: '$$rule.relation',
+                rule_relation: {
+                  $arrayElemAt: [
+                    {
+                      $map: {
+                        input: '$relations',
+                        as: 'rel',
+                        in: {
+                          $cond: [
+                            { $eq: ['$$rel._id', '$$rule.relation'] },
+                            '$$rel.name',
+                            null,
+                          ],
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+                rule_value: '$$rule.value',
+              },
+            },
+          },
+        },
+      },
+
+      // Final project
+      {
+        $project: {
+          _id: 1,
+          collection_id: 1,
+          title: 1,
+          handle: 1,
+          cat_image: 1,
+          meta_title: 1,
+          meta_desc: 1,
+          body_html: 1,
+          shop_id: 1,
+          category_type: 1,
+          condition_id: 1,
+          products_id: 1,
+          publish_status: 1,
+          sorting: 1,
+          rules: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    ]);
+
+    if (!categoryData.length) {
+      return res.status(404).json({ success: false, error: 'Category not found' });
+    }
+
+    return res.json({ success: true, category: categoryData[0] });
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

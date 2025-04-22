@@ -276,6 +276,7 @@ export const allproducts = async (req, res) => {
       return res.status(200).json({
         message: "Successfully fetched",
         data: responseData,
+        isSuccess:true
       });
     } catch (err) {
       console.error("Error fetching product:", err);
