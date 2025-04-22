@@ -121,3 +121,98 @@ shop_id,
         return res.status(500).json({ message: err?.message, isSuccess: false });
       }
 }
+export const AllproductType = async(req,res)=>{
+    try {
+        let { page = 1, limit = 10, search = "" } = req.query;
+        page = parseInt(page);
+        limit = parseInt(limit);
+        const skip = (page - 1) * limit;
+    
+        const shop_id = new mongoose.Types.ObjectId("67c56189e4285a7d8c487efb"); // Replace with dynamic shopId later
+    
+        const matchStage = {
+          
+shop_id,
+          ...(search && {
+            product_type_name: { $regex: search.trim(), $options: "i" }
+          })
+        };
+    
+        const result = await ProductType.aggregate([
+          { $match: matchStage },
+          {
+            $facet: {
+              data: [
+                { $sort: { product_type_name: 1 } },
+                { $skip: skip },
+                { $limit: limit }
+              ],
+              totalCount: [
+                { $count: "count" }
+              ]
+            }
+          }
+        ]);
+    
+        const types = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
+    
+        return res.json({
+          message: "Successfully fetched",
+          data: types,
+          total,
+          isSuccess: true
+        });
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: err?.message, isSuccess: false });
+      }
+}
+export const Allbrands = async(req,res)=>{
+    try {
+        let { page = 1, limit = 10, search = "" } = req.query;
+        page = parseInt(page);
+        limit = parseInt(limit);
+        const skip = (page - 1) * limit;
+    
+        const shop_id = new mongoose.Types.ObjectId("67c56189e4285a7d8c487efb"); // Replace with dynamic shopId later
+    
+        const matchStage = {
+          
+shop_id,
+          ...(search && {
+            brand_name: { $regex: search.trim(), $options: "i" }
+          })
+        };
+    
+        const result = await ProductType.aggregate([
+          { $match: matchStage },
+          {
+            $facet: {
+              data: [
+                { $sort: { product_type_name: 1 } },
+                { $skip: skip },
+                { $limit: limit }
+              ],
+              totalCount: [
+                { $count: "count" }
+              ]
+            }
+          }
+        ]);
+    
+        const brands = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
+    
+        return res.json({
+          message: "Successfully fetched",
+          data: brands,
+          total,
+          isSuccess: true
+        });
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: err?.message, isSuccess: false });
+      }
+}
+
