@@ -144,13 +144,13 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 
 //     let type = "Category";
 
-//     // Check if handle belongs to a category
+//     Check if handle belongs to a category
 //     let existhandle = await Category.findOne({ handle }).populate({
 //       path: "rules",
 //       populate: [{ path: "column" }, { path: "relation" }]
 //     });
 
-//     // If not category, check if it's a product
+//     If not category, check if it's a product
 //     if (!existhandle) {
 //       type = "Product";
 
@@ -177,7 +177,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 //       });
 //     }
 
-//     // Construct filters from rules
+//     Construct filters from rules
 //     let filters = {};
 
 //     for (const rule of existhandle.rules) {
@@ -207,7 +207,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 //       }
 //     }
     
-//     // Resolve references
+//     Resolve references
 //     const [tagDoc] = await Promise.all([
 //       filters.product_type ? Product.findOne({ product_type_name: filters.product_type }) : null,
 //       filters.tags ? Tag.findOne({ tag_name:filters.tags}) : null,
@@ -220,7 +220,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
 //     if (find) filters.tags = find._id;
 
 
-//     // Fetch products
+//     Fetch products
 //     const [result] = await Product.aggregate([
 //       { $match: filters },
 //       {
