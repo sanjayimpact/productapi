@@ -8,6 +8,7 @@ import { Brand } from "../models/brand.js";
 import mongoose from "mongoose";
 import connectDb from "../db.js";
 export const allproducts = async (req, res) => {
+
   await connectDb();
   const shopid = req.get("Authorization"); // or req.headers['authorization']
 
@@ -48,7 +49,12 @@ export const allproducts = async (req, res) => {
       }),
     };
     
-    if (search) matchQuery.title = { $regex: search, $options: "i" };
+ if (search) {
+  const searchWords = search.trim().split(/\s+/);
+  matchQuery.$and = searchWords.map(word => ({
+    title: { $regex: word, $options: "i" }
+  }));
+}
     if (selectedTag) matchQuery.tags = new mongoose.Types.ObjectId(selectedTag);
     if (selectedBrands.length) matchQuery.brand = { $in: selectedBrands.map((id) => id.trim()) };
     if (selectedTypes.length) matchQuery.product_type_name = { $in: selectedTypes.map((id) => id.trim()) };
@@ -154,7 +160,7 @@ export const allproducts = async (req, res) => {
         },
       },
       { $project: { defaultVariant: 0 } },
-    ]);
+    ]).collation({ locale: "en", strength: 1 });
 
     return res.json({
       message: "Successfully fetched",
