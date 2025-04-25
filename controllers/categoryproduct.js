@@ -333,7 +333,7 @@ export const allCategory = async (req, res) => {
     }
 
     // === Category Handler ===
-    let filters = {};
+    let filters = {product_status:"Active"};
     for (const rule of existhandle.rules) {
       let field = rule.column?.name;
       const relation = rule.relation?.name;
