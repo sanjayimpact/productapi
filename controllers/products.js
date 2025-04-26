@@ -23,13 +23,14 @@ export const allproducts = async (req, res) => {
       search = "",
       tag: selectedTag = "",
       sort,
-      order = "asc",
+      order,
       brands: rawBrands = [],
       types: rawTypes = [],
       status: rawStatus = [],
      
     } = req.query;
   let{filter} = req.query;
+  
   
     const selectedBrands = Array.isArray(rawBrands) ? rawBrands : [rawBrands].filter(Boolean);
     const selectedTypes = Array.isArray(rawTypes) ? rawTypes : [rawTypes].filter(Boolean);
@@ -61,7 +62,7 @@ export const allproducts = async (req, res) => {
     if (selectedStatus.length) matchQuery.product_status = { $in: selectedStatus };
 
     // Construct sort object
-    const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" ? sort : "1";
+    const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" || sort==="product_type_name" || sort ==="brand" ? sort : "1";
     const sortQuery = { [sortField]: sortOrder };
 
     // Get total count
