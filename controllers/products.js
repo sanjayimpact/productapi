@@ -30,8 +30,7 @@ export const allproducts = async (req, res) => {
      
     } = req.query;
   let{filter} = req.query;
-  
-  console.log(sort,order);
+
     const selectedBrands = Array.isArray(rawBrands) ? rawBrands : [rawBrands].filter(Boolean);
     const selectedTypes = Array.isArray(rawTypes) ? rawTypes : [rawTypes].filter(Boolean);
     const selectedStatus = Array.isArray(rawStatus) ? rawStatus : [rawStatus].filter(Boolean);
@@ -64,14 +63,14 @@ export const allproducts = async (req, res) => {
     // Construct sort object
     const sortField = sort === "title" || sort === "createdAt" || sort === "updatedAt" || sort==="product_type_name" || sort ==="brand"  ? sort : "-1";
     const sortQuery = { [sortField]: sortOrder };
-   console.log(sortQuery);
+
     // Get total count
     const totalProducts = await Product.countDocuments(matchQuery);
    
     // Aggregation
     let products;
    if(sortField!="-1"){
-    console.log("yes");
+ 
     products = await Product.aggregate([
       { $match: matchQuery },
       {
@@ -171,108 +170,159 @@ export const allproducts = async (req, res) => {
       { $project: { defaultVariant: 0 } },
     ]).collation({ locale: "en", strength: 1 });
    }
-if(sortField=="-1"){
-  console.log("No");
-
-  products = await Product.aggregate([
-    { $match: matchQuery },
-    {
-      $project: {
-        publish_status: 0,
-        meta_title: 0,
-        meta_description: 0,
-        body_html: 0,
-        shop_id: 0,
-        brand_name: 0,
-        product_type: 0,
-        product_id: 0,
-        tags: 0,
+   if (sortField == "-1") {
+    products = await Product.aggregate([
+      { $match: matchQuery },
+      {
+        $project: {
+          publish_status: 0,
+          meta_title: 0,
+          meta_description: 0,
+          body_html: 0,
+          shop_id: 0,
+          brand_name: 0,
+          product_type: 0,
+          product_id: 0,
+          tags: 0,
+        },
       },
-    },
-    {$sort:{title:1}},
-    { $skip: skip },
-    { $limit: parseInt(limit) },
-    {
-      $lookup: {
-        from: "variants",
-        let: { productId: "$_id" },
-        pipeline: [
-          { $match: { $expr: { $and: [{ $eq: ["$product_id", "$$productId"] }, { $eq: ["$isVariandetails", 1] }] } } },
-          {
-            $lookup: {
-              from: "variantdetails",
-              localField: "_id",
-              foreignField: "variant_id",
-              as: "variantDetails",
+      {
+        $lookup: {
+          from: "variants",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$product_id", "$$productId"] },
+                    { $eq: ["$isVariandetails", 1] }
+                  ]
+                }
+              }
             },
-          },
-          {
-            $lookup: {
-              from: "stocks",
-              localField: "_id",
-              foreignField: "variant_id",
-              as: "stockData",
-            },
-          },
-          {
-            $addFields: {
-              Stock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
-            },
-          },
-          { $project: { stockData: 0 } },
-        ],
-        as: "variants",
-      },
-    },
-    {
-      $addFields: {
-        totalInventory: { $sum: "$variants.Stock" },
-      },
-    },
-    {
-      $lookup: {
-        from: "variants",
-        let: { productId: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [{ $eq: ["$product_id", "$$productId"] }, { $eq: ["$isdefault", true] }],
+            {
+              $lookup: {
+                from: "variantdetails",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "variantDetails",
               },
             },
-          },
-          {
-            $lookup: {
-              from: "stocks",
-              localField: "_id",
-              foreignField: "variant_id",
-              as: "stockData",
+            {
+              $lookup: {
+                from: "stocks",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "stockData",
+              },
             },
-          },
-          {
-            $addFields: {
-              defaultstock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+            {
+              $addFields: {
+                Stock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+              },
             },
-          },
-          { $project: { stockData: 0 } },
-        ],
-        as: "defaultVariant",
+            { $project: { stockData: 0 } },
+          ],
+          as: "variants",
+        },
       },
-    },
-    {
-      $addFields: {
-        defaultstock: {
-          $cond: {
-            if: { $gt: [{ $size: "$defaultVariant" }, 0] },
-            then: { $arrayElemAt: ["$defaultVariant.defaultstock", 0] },
-            else: 0,
+      {
+        $addFields: {
+          totalInventory: { $sum: "$variants.Stock" },
+        },
+      },
+      {
+        $lookup: {
+          from: "variants",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$product_id", "$$productId"] },
+                    { $eq: ["$isdefault", true] },
+                  ],
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "stocks",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "stockData",
+              },
+            },
+            {
+              $addFields: {
+                defaultstock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+              },
+            },
+            { $project: { stockData: 0 } },
+          ],
+          as: "defaultVariant",
+        },
+      },
+      {
+        $addFields: {
+          defaultstock: {
+            $cond: {
+              if: { $gt: [{ $size: "$defaultVariant" }, 0] },
+              then: { $arrayElemAt: ["$defaultVariant.defaultstock", 0] },
+              else: 0,
+            },
           },
         },
       },
-    },
-    { $project: { defaultVariant: 0 } },
-  ]).collation({ locale: "en", strength: 1 });
-}
+      // ➕ Lookup all variants for grand total stock
+      {
+        $lookup: {
+          from: "variants",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$product_id", "$$productId"]
+                }
+              }
+            },
+            {
+              $lookup: {
+                from: "stocks",
+                localField: "_id",
+                foreignField: "variant_id",
+                as: "stockData",
+              },
+            },
+            {
+              $addFields: {
+                allStock: { $ifNull: [{ $arrayElemAt: ["$stockData.quantity", 0] }, 0] },
+              },
+            },
+            { $project: { stockData: 0 } },
+          ],
+          as: "allVariants",
+        },
+      },
+      {
+        $addFields: {
+          grandTotalStock: { $sum: "$allVariants.allStock" },
+        },
+      },
+      { $project: { defaultVariant: 0, allVariants: 0 } },
+    
+      // 🟦 Sort by totalInventory or any other dynamic field
+      { $sort: { grandTotalStock: sortOrder } },
+    
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+    ]).collation({ locale: "en", strength: 1 });
+    
+  }
+  
     return res.json({
       message: "Successfully fetched",
       data: products,
