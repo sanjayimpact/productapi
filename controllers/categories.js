@@ -17,6 +17,13 @@ import connectDb from "../db.js";
 export const categorylist = async(req,res)=>{
   await connectDb();
   try {
+
+    const shopid = req.get("Authorization"); // or req.headers['authorization']
+
+    const myId = shopid?.split(" ")[1]; // Extract the shopId from the token
+     if(!myId){
+       return res.status(401).json({ message: "Unauthorized access" });
+     }
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -25,8 +32,8 @@ export const categorylist = async(req,res)=>{
     const order = req.query.order === 'desc' ? -1 : 1; // default ascending
     const channel = req.query.channel;
     const type = req.query.category_type;
-
-    const matchStage = {};
+    const shopId = new mongoose.Types.ObjectId(myId); // Convert to ObjectId
+    const matchStage = {shop_id: shopId}; // Match stage for aggregation pipeline};
     const andConditions = [];
 
     if (searchQuery) {
