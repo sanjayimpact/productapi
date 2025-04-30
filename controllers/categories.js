@@ -287,6 +287,7 @@ export const getCategoryById = async (req, res) => {
           publish_status: 1,
           sorting: 1,
           rules: 1,
+          logicalOperator:1,
           createdAt: 1,
           updatedAt: 1,
         },

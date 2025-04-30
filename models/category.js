@@ -42,6 +42,11 @@ const categorySchema = new mongoose.Schema({
   body_html: {
     type: String
   },
+  logicalOperator:{
+    type:String,
+    enum:["AND","OR"],
+    default:"AND"
+},
   rules: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'RuleCondition'
