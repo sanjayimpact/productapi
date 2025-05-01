@@ -116,7 +116,7 @@ const getRelatedProducts = async (productExists, limit = 12) => {
   if (!productExists.product_type_name) return [];
 
   const relatedProducts = await Product.find({
-    product_type_name: productExists.product_type_name,
+    product_type_name: productExists.product_type_name,product_status:"Active",
     _id: { $ne: productExists._id }
   }).limit(limit).populate( 'tags');
 
@@ -306,7 +306,7 @@ export const allCategory = async (req, res) => {
         path: "rules",
         populate: [{ path: "column" }, { path: "relation" }]
       }),
-      Product.findOne({ handle }).populate("tags")
+      Product.findOne({ handle ,product_status:"Active"}).populate("tags")
     ]);
 
     // === Product Handler ===
