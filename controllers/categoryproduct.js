@@ -315,6 +315,7 @@ export const allCategory = async (req, res) => {
       Product.findOne({ handle ,product_status:"Active"}).populate("tags")
     ]);
 
+   
     // === Product Handler ===
     if (!existhandle && productExists) {
       type = "Product";
@@ -339,7 +340,11 @@ export const allCategory = async (req, res) => {
     }
 
     // === Category Handler ===
-    let filters = {product_status:"Active"};
+    let baseFilter = {product_status:"Active"};
+    const andConditions = [];
+    const orConditions = [];
+    const seenRules = new Set();
+    let hasDuplicateInAnd = false;
     for (const rule of existhandle.rules) {
       let field = rule.column?.name;
       const relation = rule.relation?.name;
@@ -352,19 +357,52 @@ export const allCategory = async (req, res) => {
         case "tag": field = "tags"; break;
         case "vendor": field = "brand"; break;
       }
+      const ruleKey = `${field}-${value}`;
 
+  if (existhandle.rule_type === "AND") {
+    if (seenRules.has(ruleKey)) {
+      hasDuplicateInAnd = true;
+      break;
+    }
+    seenRules.add(ruleKey);
+  }
+
+      let condition = {};
       switch (relation) {
-        case "equals": filters[field] = value; break;
-        case "is not equal to": filters[field] = { $ne: value }; break;
-        case "starts with": filters[field] = { $regex: `^${value}`, $options: "i" }; break;
-        case "ends with": filters[field] = { $regex: `${value}$`, $options: "i" }; break;
-        case "contains": filters[field] = { $regex: value, $options: "i" }; break;
-        case "does not contain": filters[field] = { $not: { $regex: value, $options: "i" } }; break;
-        case "is greater than": filters[field] = { $gt: value }; break;
-        case "is less than": filters[field] = { $lt: value }; break;
+        case "equals": condition[field] = value; break;
+        case "is not equal to": condition[field] = { $ne: value }; break;
+        case "starts with": condition[field] = { $regex: `^${value}`, $options: "i" }; break;
+        case "ends with": condition[field] = { $regex: `${value}$`, $options: "i" }; break;
+        case "contains": condition[field] = { $regex: value, $options: "i" }; break;
+        case "does not contain": condition[field] = { $not: { $regex: value, $options: "i" } }; break;
+        case "is greater than": condition[field] = { $gt: value }; break;
+        case "is less than": condition[field] = { $lt: value }; break;
+      }
+      if (existhandle.logicalOperator === "OR") {
+        orConditions.push(condition);
+      } else {
+        andConditions.push(condition);
       }
     }
 
+    let filters = { ...baseFilter };
+    if (existhandle.logicalOperator === "AND" && andConditions.length) {
+      filters = {
+        $and: [
+          { product_status: "Active" },
+          ...andConditions
+        ]
+      };
+    } else if (existhandle.logicalOperator === "OR" && orConditions.length) {
+      filters = {
+        $and: [
+          { product_status: "Active" },
+          { $or: orConditions }
+        ]
+      };
+    } else {
+      filters = { product_status: "Active" };
+    }
     // === Replace Tag Name with ID (Only if tag filter is used) ===
     if (filters.tags && typeof filters.tags === "string") {
       const tagDoc = await Tag.findOne({ tag_name: filters.tags }).select("_id");
