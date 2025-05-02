@@ -495,111 +495,119 @@ export const productcount = async (req, res) => {
     const { handle } = req.params;
 
     const existhandle = await Category.findOne({ handle }).populate({
-      path: 'rules',
-      populate: [{ path: 'column' }, { path: 'relation' }],
+      path: "rules",
+      populate: [{ path: "column" }, { path: "relation" }],
     });
 
     if (!existhandle) {
       return res.json({
-        message: 'Category not found',
+        message: "Category not found",
         status: false,
         totalproduct: 0,
       });
     }
 
-    const matchStage = {};
-    const orLookups = [];
-    let forceNoMatch = false; // Flag to force match nothing
-
+    const baseFilter = { product_status: "Active" };
+    const andConditions = [];
+    const orConditions = [];
+    const seenEqualsFields = {};
+    let forceNoMatch = false;
 
     for (const rule of existhandle.rules) {
-      let fieldName = rule.column?.name;
+      let field = rule.column?.name;
       const relation = rule.relation?.name;
       const value = rule.value;
 
-      if (!fieldName || !relation || value === undefined) continue;
+      if (!field || !relation || value === undefined) continue;
 
-      if (fieldName === 'type') fieldName = 'product_type_name';
-      else if (fieldName === 'tag') fieldName = 'tags';
-      else if (fieldName === 'vendor') fieldName = 'brand';
+      // Normalize field names
+      switch (field) {
+        case "type": field = "product_type_name"; break;
+        case "tag": field = "tags"; break;
+        case "vendor": field = "brand"; break;
+      }
 
-      if ([ 'tags'].includes(fieldName)) {
-        let model, localField;
-
-      if (fieldName === 'tags') {
-          model = Tag;
-          localField = 'tag_name';
-        }
-
-        const refDoc = await model.findOne({ [localField]: value });
-        if (!refDoc) {
-          forceNoMatch = true; // No matching reference
+      // Handle tag reference
+      if (field === "tags") {
+        const tagDoc = await Tag.findOne({ tag_name: value });
+        if (!tagDoc) {
+          forceNoMatch = true;
           break;
         }
-        const objectId = new mongoose.Types.ObjectId(refDoc._id);
+
+        const tagId = new mongoose.Types.ObjectId(tagDoc._id);
+        const condition = {};
 
         switch (relation) {
-          case 'equals':
-            matchStage[fieldName] = objectId;
-            break;
-          case 'is not equal to':
-            matchStage[fieldName] = { $ne: objectId };
-            break;
-          default:
-            console.warn(`Unsupported relation on ObjectId: ${relation}`);
-            break;
+          case "equals": condition[field] = tagId; break;
+          case "is not equal to": condition[field] = { $ne: tagId }; break;
+          default: continue;
         }
-      } else {
-        switch (relation) {
-          case 'equals':
-            matchStage[fieldName] = value;
-            break;
-          case 'is not equal to':
-            matchStage[fieldName] = { $ne: value };
-            break;
-          case 'starts with':
-            matchStage[fieldName] = { $regex: `^${value}`, $options: 'i' };
-            break;
-          case 'ends with':
-            matchStage[fieldName] = { $regex: `${value}$`, $options: 'i' };
-            break;
-          case 'contains':
-            matchStage[fieldName] = { $regex: value, $options: 'i' };
-            break;
-          case 'does not contain':
-            matchStage[fieldName] = { $not: { $regex: value, $options: 'i' } };
-            break;
-          case 'is greater than':
-            matchStage[fieldName] = { $gt: value };
-            break;
-          case 'is less than':
-            matchStage[fieldName] = { $lt: value };
-            break;
-          default:
-            console.warn(`Unknown relation: ${relation}`);
-            break;
-        }
+
+        if (existhandle.logicalOperator === "OR") orConditions.push(condition);
+        else andConditions.push(condition);
+        continue;
       }
+
+      // Detect conflict in AND for equals
+      if (existhandle.logicalOperator === "AND" && relation === "equals") {
+        if (seenEqualsFields[field] && seenEqualsFields[field] !== value) {
+          forceNoMatch = true;
+          break;
+        }
+        seenEqualsFields[field] = value;
+      }
+
+      const condition = {};
+      switch (relation) {
+        case "equals": condition[field] = value; break;
+        case "is not equal to": condition[field] = { $ne: value }; break;
+        case "starts with": condition[field] = { $regex: `^${value}`, $options: "i" }; break;
+        case "ends with": condition[field] = { $regex: `${value}$`, $options: "i" }; break;
+        case "contains": condition[field] = { $regex: value, $options: "i" }; break;
+        case "does not contain": condition[field] = { $not: { $regex: value, $options: "i" } }; break;
+        case "is greater than": condition[field] = { $gt: value }; break;
+        case "is less than": condition[field] = { $lt: value }; break;
+        default: continue;
+      }
+
+      if (existhandle.logicalOperator === "OR") orConditions.push(condition);
+      else andConditions.push(condition);
     }
+
+    // Build final matchStage
+    let matchStage = {};
+
     if (forceNoMatch) {
-      // Forcefully make the filter impossible to match
-      matchStage._id = { $exists: false };
+      matchStage._id = { $exists: false }; // Guaranteed to return 0
+    } else if (existhandle.logicalOperator === "OR" && orConditions.length) {
+      matchStage = {
+        $and: [ baseFilter, { $or: orConditions } ]
+      };
+    } else if (existhandle.logicalOperator === "AND" && andConditions.length) {
+      matchStage = {
+        $and: [ baseFilter, ...andConditions ]
+      };
+    } else {
+      matchStage = baseFilter;
     }
+
     const aggregationPipeline = [
       { $match: matchStage },
-      { $count: 'totalproduct' }
+      { $count: "totalproduct" }
     ];
 
     const result = await Product.aggregate(aggregationPipeline).exec();
     const totalproduct = result[0]?.totalproduct || 0;
 
     return res.json({
-      message: 'Successfully fetched',
+      message: "Successfully fetched",
       status: true,
       totalproduct,
     });
+
   } catch (err) {
-    console.error('Error fetching product count:', err);
+    console.error("Error fetching product count:", err);
     return res.status(500).json({
       message: err.message,
       status: false,
