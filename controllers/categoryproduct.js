@@ -11,7 +11,7 @@ import { RuleCondition } from "../models/rulecondition.js";
 import { RuleRelation } from "../models/rulerelation.js";
 import connectDb from "../db.js";
 import mongoose from "mongoose";
-
+import crypto from 'crypto';
 
 
 
@@ -19,46 +19,52 @@ import mongoose from "mongoose";
 
 // --- Helpers remain untouched but grouped for clarity ---
 const getVariantData = async (variant) => {
-  const [variantDetails, stock] = await Promise.all([
+  const [details, stock] = await Promise.all([
     Variantdetail.find({ variant_id: variant._id }),
-    Stock.findOne({ variant_id: variant._id })
+    Stock.findOne({ variant_id: variant._id }),
   ]);
-  const options = variantDetails.map(detail => ({
+  const options = details.map((detail) => ({
     id: detail._id,
     name: detail?.Options,
-    values: detail?.option_values || []
+    values: detail?.option_values || [],
   }));
   return {
     ...variant._doc,
     options,
     stock: stock ? stock.quantity : 0,
     stockId: stock?._id,
-    location_id: stock?.location_id
+    location_id: stock?.location_id,
   };
 };
-
 const aggregateOptions = (variants) => {
-  const combinedOptions = variants.reduce((acc, variant) => acc.concat(variant.options), []);
   const groupedOptions = {};
-  combinedOptions.forEach(option => {
-    const optionName = Array.isArray(option.name) ? option.name[0] : option.name;
-    const optionValues = Array.isArray(option.values) &&
-      option.values.length > 0 &&
-      Array.isArray(option.values[0])
-      ? option.values.map(val => (Array.isArray(val) ? val[1] : val))
-      : option.values;
-    if (groupedOptions[optionName]) {
-      groupedOptions[optionName].values = Array.from(new Set([...groupedOptions[optionName].values, ...optionValues]));
-    } else {
-      groupedOptions[optionName] = { ...option, name: optionName, values: optionValues };
-    }
+
+  variants.forEach((variant) => {
+    variant.options.forEach((option) => {
+      if (Array.isArray(option.name) && option.name.length > 0) {
+        option.name.forEach((optionKey) => {
+          const optionValue = option.values.get(optionKey);
+
+          if (!groupedOptions[optionKey]) {
+            groupedOptions[optionKey] = new Set();
+          }
+
+          if (optionValue) {
+            groupedOptions[optionKey].add(optionValue);
+          }
+        });
+      }
+    });
   });
-  return Object.values(groupedOptions).map(opt => ({
-    ...opt,
-    values: Array.isArray(opt.values)
-      ? opt.values.map(val => (Array.isArray(val) ? val[1] : val))
-      : (opt.values ? [opt.values] : [])
+
+  return Object.entries(groupedOptions).map(([name, values]) => ({
+    id: generateUniqueId(name), // Generate unique IDs dynamically
+    name,
+    values: Array.from(values),
   }));
+};
+const generateUniqueId = (name) => {
+  return crypto.createHash('md5').update(name).digest('hex');
 };
 
 const transformProduct = (product, variants, categoryId = null) => {
